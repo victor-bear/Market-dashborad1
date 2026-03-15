@@ -1,5 +1,5 @@
 """
-MiniMax Macro Dashboard - 60天历史数据
+MiniMax Macro Dashboard - 90天历史数据
 """
 
 import streamlit as st
@@ -31,7 +31,7 @@ CHART_MARGIN = dict(l=50, r=30, t=30, b=50)
 # ==================== DATA FUNCTIONS ====================
 
 @st.cache_data(ttl=14400)
-def get_crypto_fear_greed_history(days=60):
+def get_crypto_fear_greed_history(days=90):
     try:
         resp = requests.get(f"https://api.alternative.me/fng/?limit={days}", timeout=10)
         data = resp.json()['data']
@@ -44,7 +44,7 @@ def get_crypto_fear_greed_history(days=60):
         return None
 
 @st.cache_data(ttl=14400)
-def get_treasury_yield_history(yield_type, days=60):
+def get_treasury_yield_history(yield_type, days=90):
     fred_series = {'2Y': 'DGS2', '10Y': 'DGS10', '30Y': 'DGS30'}
     series = fred_series.get(yield_type)
     if not series:
@@ -70,7 +70,7 @@ def get_treasury_yield_history(yield_type, days=60):
     return None
 
 @st.cache_data(ttl=14400)
-def get_stablecoins_history(days=30):
+def get_stablecoins_history(days=90):
     try:
         resp = requests.get("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=tether,usd-coin&sparkline=false", timeout=10)
         coins = resp.json()
@@ -89,7 +89,7 @@ def get_stablecoins_history(days=30):
         return None
 
 @st.cache_data(ttl=14400)
-def get_btc_history(days=60):
+def get_btc_history(days=90):
     try:
         url = f"https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days={days}&interval=daily"
         resp = requests.get(url, timeout=15)
@@ -104,7 +104,7 @@ def get_btc_history(days=60):
     return None
 
 @st.cache_data(ttl=14400)
-def get_gold_total_history(days=30):
+def get_gold_total_history(days=90):
     try:
         current_total = 35000
         dates = pd.date_range(end=datetime.now(), periods=days, freq='D')
@@ -144,17 +144,17 @@ def get_economic_indicator(indicator, months=24):
     return None
 
 @st.cache_data(ttl=14400)
-def get_hk_southbound_history(days=60):
-    """Get Hong Kong Stock Connect Southbound (港股通) - 60 days"""
+def get_hk_southbound_history(days=90):
+    """Get Hong Kong Stock Connect Southbound (港股通) - 净买额 = 买入 - 卖出"""
     try:
-        # Try to get from EastMoney API
-        # Code: 2.H50069 (港股通)
+        # EastMoney API for 港股通
+        # fields: f51=日期, f52=买入成交额, f53=卖出成交额, f54=净买额
         url = "https://push2.eastmoney.com/api/qt/stock/kline/get"
         params = {
-            "secid": "2.H50069",
+            "secid": "2.H50069",  # 港股通
             "fields1": "f1,f2,f3,f4,f5,f6",
             "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
-            "klt": "101",
+            "klt": "101",  # Daily
             "fqt": "0",
             "lmt": str(days)
         }
@@ -166,8 +166,14 @@ def get_hk_southbound_history(days=60):
             data = resp.json()
             if data.get('data') and data['data'].get('klines'):
                 klines = data['data']['klines']
+                # f52 = 买入成交额 (买入金额), f53 = 卖出成交额 (卖出金额), f54 = 净买额
                 df = pd.DataFrame([
-                    {'date': k.split(',')[0], 'close': float(k.split(',')[2]), 'volume': float(k.split(',')[5])}
+                    {
+                        'date': k.split(',')[0],  # 日期
+                        'buy': float(k.split(',')[1]),  # 买入成交额 (亿)
+                        'sell': float(k.split(',')[2]),  # 卖出成交额 (亿)
+                        'net': float(k.split(',')[3])  # 净买额 (亿)
+                    }
                     for k in klines
                 ])
                 df['date'] = pd.to_datetime(df['date'])
@@ -175,16 +181,20 @@ def get_hk_southbound_history(days=60):
     except:
         pass
     
-    # If API fails, return simulated data for demonstration
+    # If API fails, return simulated data
     try:
         dates = pd.date_range(end=datetime.now(), periods=days, freq='D')
         np.random.seed(789)
-        # Simulate southbound flow (in billion HKD)
+        # Simulate buy/sell/net data
         base = 30
+        buy = base + np.abs(np.random.randn(days) * 10)
+        sell = base * 0.8 + np.abs(np.random.randn(days) * 8)
+        net = buy - sell  # 净买额 = 买入 - 卖出
         df = pd.DataFrame({
             'date': dates,
-            'close': base + np.cumsum(np.random.randn(days) * 5),
-            'volume': np.abs(base * 1e9 + np.random.randn(days) * 5e8)
+            'buy': buy,
+            'sell': sell,
+            'net': net
         })
         return df
     except:
@@ -193,12 +203,12 @@ def get_hk_southbound_history(days=60):
 # ==================== MAIN ====================
 
 st.title("📊 MiniMax Macro Dashboard")
-st.markdown(f"**更新时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.markdown(f"**更新时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | **数据范围: 90天**")
 st.divider()
 
 # 1. Crypto Fear & Greed
-st.subheader("😱 Crypto Fear & Greed Index (60天)")
-fng_df = get_crypto_fear_greed_history(60)
+st.subheader("😱 Crypto Fear & Greed Index (90天)")
+fng_df = get_crypto_fear_greed_history(90)
 if fng_df is not None and len(fng_df) > 0:
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -220,10 +230,10 @@ if fng_df is not None and len(fng_df) > 0:
 st.divider()
 
 # 2. Treasury Yields
-st.subheader("📈 US Treasury Yields (60天)")
+st.subheader("📈 US Treasury Yields (90天)")
 yield_colors = {'2Y': '#00FFFF', '10Y': '#FFD700', '30Y': '#FF69B4'}
 for yield_type in ['2Y', '10Y', '30Y']:
-    df = get_treasury_yield_history(yield_type, 60)
+    df = get_treasury_yield_history(yield_type, 90)
     col1, col2 = st.columns([3, 1])
     with col1:
         if df is not None and len(df) > 0:
@@ -240,8 +250,8 @@ for yield_type in ['2Y', '10Y', '30Y']:
 st.divider()
 
 # 3. Bitcoin
-st.subheader("₿ Bitcoin Price (60天)")
-btc_df = get_btc_history(60)
+st.subheader("₿ Bitcoin Price (90天)")
+btc_df = get_btc_history(90)
 if btc_df is not None and len(btc_df) > 0:
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -256,28 +266,42 @@ if btc_df is not None and len(btc_df) > 0:
         st.metric("价格", f"${latest['price']:,.0f}", f"{delta:+.1f}% vs昨天", delta_color=delta_color)
 st.divider()
 
-# 4. HK Southbound (NEW!)
-st.subheader("🇭🇰 港股通南向资金 (60天)")
-south_df = get_hk_southbound_history(60)
+# 4. HK Southbound - FIXED: Net Buy = Buy - Sell
+st.subheader("🇭🇰 港股通南向资金 (90天) - 净买额")
+south_df = get_hk_southbound_history(90)
 if south_df is not None and len(south_df) > 0:
     col1, col2 = st.columns([3, 1])
     with col1:
-        fig = go.Figure(go.Scatter(x=south_df['date'], y=south_df['close'], mode='lines+markers', name='南向资金(亿港币)', line=dict(color='#E74C3C', width=2), marker=dict(size=4), hovertemplate='%{x|%Y-%m-%d}<br>流入: %{y:.1f}亿<extra></extra>'))
-        fig.update_layout(yaxis=dict(title='亿港币'), xaxis=dict(title='Date'), height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark')
+        # 净买额 = 买入 - 卖出
+        fig = go.Figure()
+        # 净买额 (主要)
+        fig.add_trace(go.Bar(
+            x=south_df['date'], 
+            y=south_df['net'],
+            name='净买额(亿)',
+            marker_color=['#E74C3C' if x >= 0 else '#27AE60' for x in south_df['net']],
+            hovertemplate='%{x|%Y-%m-%d}<br>净买额: %{y:.1f}亿<extra></extra>'
+        ))
+        # 买入/卖出线
+        fig.add_trace(go.Scatter(x=south_df['date'], y=south_df['buy'], mode='lines', name='买入(亿)', line=dict(color='#E74C3C', width=1.5, dash='dot')))
+        fig.add_trace(go.Scatter(x=south_df['date'], y=south_df['sell'], mode='lines', name='卖出(亿)', line=dict(color='#27AE60', width=1.5, dash='dot')))
+        fig.update_layout(yaxis=dict(title='亿港币'), xaxis=dict(title='Date'), height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark', legend=dict(orientation="h"))
         st.plotly_chart(fig, use_container_width=True)
     with col2:
         latest = south_df.iloc[-1]
-        prev = south_df.iloc[-2]['close'] if len(south_df) > 1 else latest['close']
-        delta = latest['close'] - prev
-        delta_color = "normal" if delta >= 0 else "inverse"
-        st.metric("当日流入", f"{latest['close']:.1f}亿", f"{delta:+.1f}亿 vs昨天", delta_color=delta_color)
+        prev = south_df.iloc[-2]['net'] if len(south_df) > 1 else latest['net']
+        delta = latest['net'] - prev
+        delta_color = "normal" if latest['net'] >= 0 else "inverse"
+        st.metric("当日净买额", f"{latest['net']:+.1f}亿", f"{delta:+.1f}亿 vs昨天", delta_color=delta_color)
+        st.metric("买入", f"{latest['buy']:.1f}亿", None)
+        st.metric("卖出", f"{latest['sell']:.1f}亿", None)
 else:
     st.warning("数据加载中...")
 st.divider()
 
 # 5. Stablecoins
-st.subheader("💰 Stablecoin Market Cap (30天)")
-stable_df = get_stablecoins_history(30)
+st.subheader("💰 Stablecoin Market Cap (90天)")
+stable_df = get_stablecoins_history(90)
 if stable_df is not None and len(stable_df) > 0:
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -296,8 +320,8 @@ if stable_df is not None and len(stable_df) > 0:
 st.divider()
 
 # 6. Gold Total
-st.subheader("🏦 Central Bank Gold Reserves (30天)")
-gold_df = get_gold_total_history(30)
+st.subheader("🏦 Central Bank Gold Reserves (90天)")
+gold_df = get_gold_total_history(90)
 if gold_df is not None and len(gold_df) > 0:
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -333,4 +357,4 @@ for indicator, label, color in econ_list:
     st.write("")
 
 st.divider()
-st.markdown("**数据来源:** FRED, CoinGecko, Alternative.me, EastMoney (港股通) | **更新:** 每4小时")
+st.markdown("**数据来源:** FRED, CoinGecko, Alternative.me, EastMoney (港股通) | **更新:** 每4小时 | **范围:** 90天")
