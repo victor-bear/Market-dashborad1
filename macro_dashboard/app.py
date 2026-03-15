@@ -28,7 +28,6 @@ st.markdown("""
     div[data-testid="metric-container"] [data-testid="stMetricDelta"] { color: #00FF88 !important; }
     hr { border-color: #333; }
     .stAlert { background-color: #1E1E1E; color: #FFFFFF; }
-    .js-plotly-plot .plotly .main-svg text { fill: #FFFFFF !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -113,8 +112,7 @@ def get_btc_history(days=60):
 @st.cache_data(ttl=14400)
 def get_gold_total_history(days=30):
     try:
-        # Total gold reserves (approximate, all countries combined)
-        current_total = 35000  # Approximate total in tonnes
+        current_total = 35000
         dates = pd.date_range(end=datetime.now(), periods=days, freq='D')
         np.random.seed(456)
         df = pd.DataFrame({
@@ -151,6 +149,34 @@ def get_economic_indicator(indicator, months=24):
         pass
     return None
 
+# ==================== CHART HELPER ====================
+def make_chart(df, y_col, color, title, y_format=''):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df['date'], y=df[y_col], 
+        mode='lines+markers', name=y_col,
+        line=dict(color=color, width=2), 
+        marker=dict(size=4),
+        hovertemplate='%{x|%Y-%m-%d}<br>' + y_col + ': ' + (y_format.replace('.2f','').replace(',.0f','')) + '<extra></extra>'
+    ))
+    
+    yaxis_dict = dict(title=y_col, gridcolor='#333', tickfont=dict(color='#FFFFFF'))
+    if y_format:
+        yaxis_dict['tickformat'] = y_format
+    
+    fig.update_layout(
+        title=title,
+        height=CHART_HEIGHT,
+        margin=CHART_MARGIN,
+        template='plotly_dark',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(title='Date', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
+        yaxis=yaxis_dict,
+        hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
+    )
+    return fig
+
 # ==================== MAIN ====================
 
 st.title("📊 MiniMax Macro Dashboard")
@@ -164,24 +190,16 @@ if fng_df is not None and len(fng_df) > 0:
     col1, col2 = st.columns([3, 1])
     with col1:
         fig = go.Figure()
-        fig.add_hrect(y0=0, y1=25, fillcolor="red", opacity=0.15, annotation_text="Extreme Fear", annotation_font_size=10)
-        fig.add_hrect(y0=25, y1=45, fillcolor="orange", opacity=0.15, annotation_text="Fear", annotation_font_size=10)
-        fig.add_hrect(y0=45, y1=55, fillcolor="gray", opacity=0.15, annotation_text="Neutral", annotation_font_size=10)
-        fig.add_hrect(y0=55, y1=75, fillcolor="lightgreen", opacity=0.15, annotation_text="Greed", annotation_font_size=10)
-        fig.add_hrect(y0=75, y1=100, fillcolor="green", opacity=0.15, annotation_text="Extreme Greed", annotation_font_size=10)
-        fig.add_trace(go.Scatter(
-            x=fng_df['date'], y=fng_df['value'], 
-            mode='lines+markers', name='Index',
-            line=dict(color='#FF6B6B', width=2), 
-            marker=dict(size=4),
-            hovertemplate='%{x|%Y-%m-%d}<br>Index: %{y}<extra></extra>'
-        ))
+        fig.add_hrect(y0=0, y1=25, fillcolor="red", opacity=0.15, annotation_text="Extreme Fear")
+        fig.add_hrect(y0=25, y1=45, fillcolor="orange", opacity=0.15, annotation_text="Fear")
+        fig.add_hrect(y0=45, y1=55, fillcolor="gray", opacity=0.15, annotation_text="Neutral")
+        fig.add_hrect(y0=55, y1=75, fillcolor="lightgreen", opacity=0.15, annotation_text="Greed")
+        fig.add_hrect(y0=75, y1=100, fillcolor="green", opacity=0.15, annotation_text="Extreme Greed")
+        fig.add_trace(go.Scatter(x=fng_df['date'], y=fng_df['value'], mode='lines+markers', name='Index', line=dict(color='#FF6B6B', width=2), marker=dict(size=4), hovertemplate='%{x|%Y-%m-%d}<br>Index: %{y}<extra></extra>'))
         fig.update_layout(
-            yaxis=dict(range=[0, 100], title='Index (0-100)', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-            xaxis=dict(title='Date', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-            height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark',
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-            hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
+            yaxis=dict(range=[0, 100], title='Index (0-100)', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+            xaxis=dict(title='Date', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+            height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
         )
         st.plotly_chart(fig, use_container_width=True)
     with col2:
@@ -200,19 +218,11 @@ for yield_type in ['2Y', '10Y', '30Y']:
     col1, col2 = st.columns([3, 1])
     with col1:
         if df is not None and len(df) > 0:
-            fig = go.Figure(go.Scatter(
-                x=df['date'], y=df['value'], 
-                mode='lines+markers', name=yield_type,
-                line=dict(color=yield_colors[yield_type], width=2), 
-                marker=dict(size=4),
-                hovertemplate='%{x|%Y-%m-%d}<br>Yield: %{y:.2f}%<extra></extra>'
-            ))
+            fig = go.Figure(go.Scatter(x=df['date'], y=df['value'], mode='lines+markers', name=yield_type, line=dict(color=yield_colors[yield_type], width=2), marker=dict(size=4), hovertemplate='%{x|%Y-%m-%d}<br>Yield: %{y:.2f}%<extra></extra>'))
             fig.update_layout(
-                yaxis=dict(title='Yield (%)', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-                xaxis=dict(title='Date', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-                height=240, margin=CHART_MARGIN, template='plotly_dark',
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
+                yaxis=dict(title='Yield (%)', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+                xaxis=dict(title='Date', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+                height=240, margin=CHART_MARGIN, template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
             )
             st.plotly_chart(fig, use_container_width=True)
     with col2:
@@ -230,20 +240,11 @@ btc_df = get_btc_history(60)
 if btc_df is not None and len(btc_df) > 0:
     col1, col2 = st.columns([3, 1])
     with col1:
-        fig = go.Figure(go.Scatter(
-            x=btc_df['date'], y=btc_df['price'], 
-            mode='lines+markers', name='BTC',
-            line=dict(color='#F7931A', width=2), 
-            marker=dict(size=4),
-            fill='tozeroy', fillcolor='rgba(247,147,26,0.1)',
-            hovertemplate='%{x|%Y-%m-%d}<br>Price: $%{y:,.0f}<extra></extra>'
-        ))
+        fig = go.Figure(go.Scatter(x=btc_df['date'], y=btc_df['price'], mode='lines+markers', name='BTC', line=dict(color='#F7931A', width=2), marker=dict(size=4), fill='tozeroy', fillcolor='rgba(247,147,26,0.1)', hovertemplate='%{x|%Y-%m-%d}<br>Price: $%{y:,.0f}<extra></extra>'))
         fig.update_layout(
-            yaxis=dict(title='Price (USD)', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333', tickformat=',.0f'),
-            xaxis=dict(title='Date', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-            height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark',
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-            hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
+            yaxis=dict(title='Price (USD)', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF'), tickformat=',.0f'),
+            xaxis=dict(title='Date', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+            height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
         )
         st.plotly_chart(fig, use_container_width=True)
     with col2:
@@ -265,12 +266,9 @@ if stable_df is not None and len(stable_df) > 0:
         fig.add_trace(go.Scatter(x=stable_df['date'], y=stable_df['USDC'], mode='lines+markers', name='USDC', line=dict(color='#2775CA', width=2), marker=dict(size=4), hovertemplate='%{x|%Y-%m-%d}<br>USDC: $%{y:.1f}B<extra></extra>'))
         fig.add_trace(go.Scatter(x=stable_df['date'], y=stable_df['Total'], mode='lines+markers', name='Total', line=dict(color='#888888', width=2, dash='dash'), marker=dict(size=4), hovertemplate='%{x|%Y-%m-%d}<br>Total: $%{y:.1f}B<extra></extra>'))
         fig.update_layout(
-            yaxis=dict(title='Billion USD', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-            xaxis=dict(title='Date', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-            height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark',
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-            hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF')),
-            legend=dict(font=dict(color='#FFFFFF'), bgcolor='rgba(0,0,0,0)')
+            yaxis=dict(title='Billion USD', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+            xaxis=dict(title='Date', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+            height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF')), legend=dict(font=dict(color='#FFFFFF'), bgcolor='rgba(0,0,0,0)')
         )
         st.plotly_chart(fig, use_container_width=True)
     with col2:
@@ -287,19 +285,11 @@ gold_df = get_gold_total_history(30)
 if gold_df is not None and len(gold_df) > 0:
     col1, col2 = st.columns([3, 1])
     with col1:
-        fig = go.Figure(go.Scatter(
-            x=gold_df['date'], y=gold_df['total'], 
-            mode='lines+markers', name='Total Gold',
-            line=dict(color='#FFD700', width=2), 
-            marker=dict(size=5, color='#FFD700'),
-            hovertemplate='%{x|%Y-%m-%d}<br>Total: %{y:,.0f} tonnes<extra></extra>'
-        ))
+        fig = go.Figure(go.Scatter(x=gold_df['date'], y=gold_df['total'], mode='lines+markers', name='Total Gold', line=dict(color='#FFD700', width=2), marker=dict(size=5, color='#FFD700'), hovertemplate='%{x|%Y-%m-%d}<br>Total: %{y:,.0f} tonnes<extra></extra>'))
         fig.update_layout(
-            yaxis=dict(title='Tonnes', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-            xaxis=dict(title='Date', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-            height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark',
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-            hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
+            yaxis=dict(title='Tonnes', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+            xaxis=dict(title='Date', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+            height=CHART_HEIGHT, margin=CHART_MARGIN, template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
         )
         st.plotly_chart(fig, use_container_width=True)
     with col2:
@@ -322,19 +312,11 @@ for indicator, label, color in econ_list:
     col1, col2 = st.columns([3, 1])
     with col1:
         if df is not None and len(df) > 0:
-            fig = go.Figure(go.Scatter(
-                x=df['date'], y=df['value'], 
-                mode='lines+markers', name=label,
-                line=dict(color=color, width=2), 
-                marker=dict(size=6),
-                hovertemplate='%{x|%Y-%m-%d}<br>' + label + ': %{y:.2f}<extra></extra>'
-            ))
+            fig = go.Figure(go.Scatter(x=df['date'], y=df['value'], mode='lines+markers', name=label, line=dict(color=color, width=2), marker=dict(size=6), hovertemplate='%{x|%Y-%m-%d}<br>' + label.replace('(%)','') + ': %{y:.2f}<extra></extra>'))
             fig.update_layout(
-                yaxis=dict(title=label, titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-                xaxis=dict(title='Date', titlefont=dict(color='#FFFFFF'), tickfont=dict(color='#FFFFFF'), gridcolor='#333'),
-                height=240, margin=CHART_MARGIN, template='plotly_dark',
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
+                yaxis=dict(title=label, gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+                xaxis=dict(title='Date', gridcolor='#333', tickfont=dict(color='#FFFFFF'), titlefont=dict(color='#FFFFFF')),
+                height=240, margin=CHART_MARGIN, template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', hoverlabel=dict(bgcolor='#1E1E1E', font=dict(color='#FFFFFF'))
             )
             st.plotly_chart(fig, use_container_width=True)
     with col2:
