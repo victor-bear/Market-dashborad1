@@ -147,12 +147,12 @@ def get_economic_indicator(indicator, months=24):
 def get_hk_southbound_history(days=90):
     """Get Hong Kong Stock Connect Southbound (港股通南向) - 真实数据"""
     import json
+    import re
     
     # 东方财富 API - 港股通南向 (MUTUAL_TYPE = '006')
     url = "https://datacenter-web.eastmoney.com/web/api/data/v1/get"
     
     params = {
-        "callback": "jQuery112306817589356583217_1773581103416",
         "sortColumns": "TRADE_DATE",
         "sortTypes": "-1",
         "pageSize": days,
@@ -165,7 +165,7 @@ def get_hk_southbound_history(days=90):
     }
     
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0',
         'Referer': 'https://data.eastmoney.com/hsgtV2/hsgtDetail/scgkDetail_nx.html'
     }
     
@@ -175,34 +175,30 @@ def get_hk_southbound_history(days=90):
         if resp.status_code == 200:
             text = resp.text
             
-            # Remove callback wrapper
-            if '(' in text and ')' in text:
-                start = text.find('(')
-                end = text.rfind(')')
-                json_text = text[start+1:end]
-                data = json.loads(json_text)
-            else:
-                data = json.loads(text)
-            
-            if data.get('success') and data.get('result', {}).get('data'):
-                records = data['result']['data']
+            # Extract JSON from response
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                data = json.loads(match.group())
                 
-                # Convert to DataFrame
-                # 注意：金额单位是 百万元，需要转换为 亿元 (÷100)
-                df = pd.DataFrame([
-                    {
-                        'date': pd.to_datetime(r['TRADE_DATE']),
-                        'buy': float(r['BUY_AMT']) / 100 if r.get('BUY_AMT') else 0,  # 买入(亿)
-                        'sell': float(r['SELL_AMT']) / 100 if r.get('SELL_AMT') else 0,  # 卖出(亿)
-                        'net': float(r['NET_DEAL_AMT']) / 100 if r.get('NET_DEAL_AMT') else 0  # 净买额(亿)
-                    }
-                    for r in records
-                    if r.get('NET_DEAL_AMT') is not None
-                ])
-                
-                # 按日期排序
-                df = df.sort_values('date').tail(days)
-                return df
+                if data.get('success') and data.get('result', {}).get('data'):
+                    records = data['result']['data']
+                    
+                    # 过滤有效的南向资金数据 (MUTUAL_TYPE='006')
+                    # 单位转换: M(百万) / 100 = 亿
+                    df = pd.DataFrame([
+                        {
+                            'date': pd.to_datetime(r['TRADE_DATE']),
+                            'buy': float(r['BUY_AMT']) / 100 if r.get('BUY_AMT') else 0,  # 买入(亿)
+                            'sell': float(r['SELL_AMT']) / 100 if r.get('SELL_AMT') else 0,  # 卖出(亿)
+                            'net': float(r['NET_DEAL_AMT']) / 100 if r.get('NET_DEAL_AMT') else 0  # 净买额(亿)
+                        }
+                        for r in records
+                        if r.get('MUTUAL_TYPE') == '006' and r.get('NET_DEAL_AMT') is not None
+                    ])
+                    
+                    if len(df) > 0:
+                        df = df.sort_values('date').tail(days)
+                        return df
     except Exception as e:
         print(f"Error: {e}")
     
