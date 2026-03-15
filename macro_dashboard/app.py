@@ -155,7 +155,7 @@ def get_hk_southbound_history(days=90):
     params = {
         "sortColumns": "TRADE_DATE",
         "sortTypes": "-1",
-        "pageSize": days,
+        "pageSize": 500,  # Need large page size to get enough records
         "pageNumber": 1,
         "reportName": "RPT_MUTUAL_DEAL_HISTORY",
         "columns": "ALL",
@@ -197,7 +197,7 @@ def get_hk_southbound_history(days=90):
                     ])
                     
                     if len(df) > 0:
-                        df = df.sort_values('date').tail(days)
+                        df = df.sort_values('date').tail(500)  # Get last 500 records max
                         return df
     except Exception as e:
         print(f"Error: {e}")
